@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { BsFile, BsSquare } from "react-icons/bs";
 
 import { Button } from "../../../shared/utilities/form";
 import { ASPECT_RATIOS, AspectRatio } from "../constants";
@@ -11,6 +10,29 @@ function aspectRatioLabel(
   if (ar.orientation === "portrait") return `${ar.value} ${t("Dọc")}`;
   if (ar.orientation === "square") return `${ar.value} ${t("Vuông")}`;
   return `${ar.value} ${t("Ngang")}`;
+}
+
+/** Ratio-shaped rectangle icon that visually reflects the aspect ratio itself. */
+function RatioShape({
+  ratio,
+  active,
+}: {
+  ratio: (typeof ASPECT_RATIOS)[number];
+  active: boolean;
+}) {
+  const [w, h] = ratio.value.split(":").map(Number);
+  const maxSize = 20;
+  const width = w >= h ? maxSize : (maxSize * w) / h;
+  const height = h >= w ? maxSize : (maxSize * h) / w;
+
+  return (
+    <span
+      className={`shrink-0 rounded-[3px] border-2 ${
+        active ? "border-blue-600 bg-blue-100" : "border-gray-400 bg-transparent"
+      }`}
+      style={{ width, height }}
+    />
+  );
 }
 
 export function AspectRatioPicker({
@@ -25,14 +47,12 @@ export function AspectRatioPicker({
   const { t } = useTranslation();
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+    <div className="flex flex-wrap gap-2">
       {ASPECT_RATIOS.map((ar) => {
         const isActive = value === ar.value;
-        const isPortrait = ar.orientation === "portrait";
-        const isSquare = ar.orientation === "square";
         const baseClass =
           buttonClassName ??
-          `flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+          `flex flex-col items-center justify-center gap-1.5 w-14 h-14 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
             isActive
               ? "text-blue-600 bg-blue-50 border-blue-400"
               : "text-gray-600 bg-white border-gray-200 hover:border-gray-300"
@@ -42,19 +62,12 @@ export function AspectRatioPicker({
           <Button
             key={ar.value}
             id={`aspect-ratio-${ar.value.replace(":", "-")}`}
+            tooltip={aspectRatioLabel(ar, t)}
             onClick={() => onChange(ar.value)}
             className={baseClass}
           >
-            <span className="text-base">
-              {isSquare ? (
-                <BsSquare />
-              ) : isPortrait ? (
-                <BsFile />
-              ) : (
-                <BsFile style={{ transform: "rotate(90deg)" }} />
-              )}
-            </span>
-            {aspectRatioLabel(ar, t)}
+            <RatioShape ratio={ar} active={isActive} />
+            <span>{ar.value}</span>
           </Button>
         );
       })}
