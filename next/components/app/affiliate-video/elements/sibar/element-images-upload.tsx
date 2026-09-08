@@ -286,14 +286,6 @@ function MultiImageListItem({
   const [zoomImage, setZoomImage] = useState("");
   const previewSrc = useMemo(() => getElementFormImagePreviewSrc(img), [img]);
 
-  useEffect(() => {
-    return () => {
-      if (previewSrc?.startsWith("blob:")) {
-        URL.revokeObjectURL(previewSrc);
-      }
-    };
-  }, [previewSrc]);
-
   if (!previewSrc) return null;
 
   const displayName = getImageDisplayName(img) || `image-${index + 1}`;
