@@ -12,6 +12,7 @@ import { URL } from "url";
 import {
   createShopeeAccountGpmProfile,
   exportCsvViaCdp,
+  fetchAffiliateDashboardDetail,
   fetchProductDetailViaCdp,
   fetchProductPageViaCdp,
   fetchAffiliateShortLinks,
@@ -466,6 +467,21 @@ async function handle(
       });
       const session = buildCsvSession(exported);
       sendJson(res, 200, { ok: true, session }, req);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (path === "/affiliate-dashboard-detail" || path === "/api/affiliate-dashboard-detail")
+    ) {
+      const body = await readBody(req);
+      const data = await fetchAffiliateDashboardDetail({
+        marketHost: String(body?.marketHost || "affiliate.shopee.vn").trim(),
+        cookie: String(body?.cookie || "").trim(),
+        startTime: Number(body?.startTime ?? body?.start_time),
+        endTime: Number(body?.endTime ?? body?.end_time),
+      });
+      sendJson(res, 200, { ok: true, data }, req);
       return;
     }
 

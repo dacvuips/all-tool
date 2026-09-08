@@ -33,6 +33,7 @@ import {
 } from "../shared/panel-list-ui";
 import { AffiliatePlusProxy, AffiliatePlusUser, extractSpcFFromCookie, formatMaybeExcelDate, getShopeeHostByDomain, normalizeMailKp, normalizeShopeeAccountDomain, parseBacVietTheoExcelColumns, parseCompoundMailKpCookie, parseUserImportLine, resolveAccountOriginCookie, resolveAccountSpcF, resolveUserCookie, resolveUserProxy, SHOPEE_ACCOUNT_DOMAINS } from "../types";
 import { UsersProfilesPanel } from "./users-profiles-panel";
+import { RevenuePanel } from "./revenue-panel";
 
 interface UsersPanelProps {
   users: AffiliatePlusUser[];
@@ -1533,6 +1534,12 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
           <TabGroup.Tab label={t("Quản lý Profile")}>
             <div className="p-4">
               <UsersProfilesPanel />
+            </div>
+          </TabGroup.Tab>
+
+          <TabGroup.Tab label={t("Doanh thu")}>
+            <div className="p-4">
+              <RevenuePanel />
             </div>
           </TabGroup.Tab>
         </TabGroup>

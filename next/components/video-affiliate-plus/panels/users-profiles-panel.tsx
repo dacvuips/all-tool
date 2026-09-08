@@ -159,12 +159,12 @@ function parseProfileSavedInfo(note?: string): ParsedProfileSessionInfo {
   };
 }
 
-type ProfileSavedInfo = ParsedProfileSessionInfo & {
+export type ProfileSavedInfo = ParsedProfileSessionInfo & {
   source: "account" | "note" | "none";
   cookieRemainingMs: number;
 };
 
-function getProfileSavedInfo(
+export function getProfileSavedInfo(
   profile: GpmLoginProfileOption,
   user?: AffiliatePlusUser
 ): ProfileSavedInfo {
@@ -207,7 +207,7 @@ function maskSecret(value?: string, keep = 4): string {
   return `${raw.slice(0, keep)}…${raw.slice(-keep)}`;
 }
 
-function resolveProfileDomain(
+export function resolveProfileDomain(
   profile: GpmLoginProfileOption,
   user?: AffiliatePlusUser
 ): string {

@@ -480,6 +480,56 @@ export async function shortenAffiliateLinks(
   return clean.map((_, i) => String(shorts[i] || ""));
 }
 
+export interface AffiliateDashboardDailyRow {
+  ymd: string;
+  clicks: number;
+  cv_by_order: number;
+  order_cvr: number;
+  order_amount: number;
+  total_commission: number;
+  total_income: number;
+  new_buyer: number;
+  program_type: number;
+  item_sold: number;
+  est_commission: string;
+  est_income: string;
+}
+
+export interface AffiliateDashboardDetail {
+  list: AffiliateDashboardDailyRow[];
+  last_update_time: number;
+  clicks_sum: number;
+  social_media_clicks: number;
+  live_clicks: number;
+  video_clicks: number;
+  cv_by_order_sum: number;
+  order_amount_sum: string;
+  est_commission_sum: string;
+  item_sold_sum: number;
+  new_buyer_sum: number;
+  [key: string]: unknown;
+}
+
+/** Dashboard doanh thu theo cookie riêng của 1 profile (không cần mở trình duyệt). */
+export async function fetchAffiliateDashboardDetail(input: {
+  marketHost?: string;
+  cookie: string;
+  startTime: number;
+  endTime: number;
+}): Promise<AffiliateDashboardDetail> {
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/affiliate-dashboard-detail", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    timeoutMs: 60000,
+  });
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.message || `Không tải được dashboard doanh thu (${res.status})`);
+  }
+  return json.data as AffiliateDashboardDetail;
+}
+
 /** Xuất CSV qua Local Agent → lưu thẳng IndexedDB. */
 export async function exportShopeeAffiliateCsv(input: {
   marketHost: string;

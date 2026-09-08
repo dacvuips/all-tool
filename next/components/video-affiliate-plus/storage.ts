@@ -6,7 +6,14 @@ import {
   idbSetConfig,
   idbSetProxiesList,
   idbSetUsersList,
+  idbBulkPutRevenueRecords,
+  idbDeleteRevenueRecord,
+  idbGetRevenueRecords,
+  idbPutRevenueRecord,
+  RevenueRecord,
 } from "./idb";
+
+export type { RevenueRecord };
 import {
   hydrateCharacterMediaObjectUrls,
   migrateGenerateConfigMedia,
@@ -497,6 +504,24 @@ export async function saveGenerateVideoConfig(
     // ignore
   }
   return next;
+}
+
+/** ==================== REVENUE (Doanh thu Affiliate theo profile) ==================== */
+
+export async function loadRevenueRecords(): Promise<RevenueRecord[]> {
+  return idbGetRevenueRecords();
+}
+
+export async function saveRevenueRecord(record: RevenueRecord): Promise<void> {
+  await idbPutRevenueRecord(record);
+}
+
+export async function saveRevenueRecords(records: RevenueRecord[]): Promise<void> {
+  await idbBulkPutRevenueRecords(records);
+}
+
+export async function removeRevenueRecord(profileId: string): Promise<void> {
+  await idbDeleteRevenueRecord(profileId);
 }
 
 export function appendLog(

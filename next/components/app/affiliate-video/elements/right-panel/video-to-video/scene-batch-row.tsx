@@ -553,7 +553,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               text={scene.visual_prompt}
               textColor="text-gray-600"
               title="PROMPT"
-              compact={layout === "row"}
               labelEl={
                 <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
                   PROMPT
@@ -569,7 +568,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               text={scene.visual_prompt}
               textColor="text-gray-600"
               title="PROMPT"
-              compact={layout === "row"}
               labelEl={
                 <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
                   PROMPT
@@ -581,7 +579,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               text={scene.motion_description}
               textColor="text-teal-700"
               title="[MOTION]"
-              compact={layout === "row"}
               labelEl={
                 <span className="mr-1 text-xs font-bold tracking-wide uppercase text-teal">
                   [MOTION]:
@@ -593,7 +590,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               text={scene.audio_description ?? ""}
               textColor="text-purple-700"
               title="[AUDIO]"
-              compact={layout === "row"}
               labelEl={
                 <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                   [AUDIO]:
@@ -605,7 +601,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               text={scene.original_content ?? ""}
               textColor="text-green-700 italic"
               title="[DIALOGUE]"
-              compact={layout === "row"}
               labelEl={
                 <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                   [DIALOGUE]:

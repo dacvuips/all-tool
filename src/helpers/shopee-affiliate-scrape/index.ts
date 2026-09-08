@@ -110,3 +110,6 @@ export type {
 
 /** Alias — GPM Login + lấy cookie → HTTP/CDP scrape. */
 export { openAffiliateBrowserCdp as openAffiliateBrowser } from "./cdp-browser";
+
+export { fetchAffiliateDashboardDetail } from "./dashboard";
+export type { AffiliateDashboardDetailInput } from "./dashboard";

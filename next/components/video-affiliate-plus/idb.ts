@@ -13,10 +13,11 @@
  * - proxies (danh sách proxy host:port:user:pass)
  * - upload-history (phiên Đăng video Shope)
  * - cookie-fetch-history (lịch sử lấy / gắn cookie)
+ * - revenue-records (dashboard doanh thu đã đồng bộ theo từng profile)
  */
 
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
-const DB_VERSION = 12;
+const DB_VERSION = 13;
 const STORE_CONFIG = "generate-video-config";
 const STORE_PRODUCT_VIDEOS = "product-videos";
 const STORE_MERGED_VIDEOS = "merged-videos";
@@ -31,6 +32,7 @@ const STORE_USERS = "users";
 const STORE_PROXIES = "proxies";
 const STORE_UPLOAD_HISTORY = "upload-history";
 const STORE_COOKIE_FETCH_HISTORY = "cookie-fetch-history";
+const STORE_REVENUE = "revenue-records";
 const CONFIG_KEY = "config";
 const IMPORT_HISTORY_KEY = "list";
 const SELECTED_HISTORY_KEY = "selectedId";
@@ -218,6 +220,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_COOKIE_FETCH_HISTORY)) {
         db.createObjectStore(STORE_COOKIE_FETCH_HISTORY);
+      }
+      if (!db.objectStoreNames.contains(STORE_REVENUE)) {
+        db.createObjectStore(STORE_REVENUE, { keyPath: "profileId" });
       }
     };
 
@@ -933,5 +938,76 @@ export async function idbClearCookieFetchHistory(): Promise<void> {
     );
   } catch (err) {
     console.warn("[video-affiliate-manager] clear cookie-fetch history failed", err);
+  }
+}
+
+/** ==================== REVENUE (Doanh thu Affiliate theo profile) ==================== */
+
+/** Bản ghi dashboard doanh thu đã đồng bộ gần nhất cho 1 profile GPM Login. */
+export type RevenueRecord = {
+  profileId: string;
+  profileName: string;
+  domain: string;
+  /** Nguyên payload `data` trả về từ /api/v3/dashboard/detail (list theo ngày + tổng). */
+  detail: Record<string, unknown>;
+  /** Thời điểm đồng bộ (client, ms). */
+  syncedAt: number;
+  error?: string;
+};
+
+export async function idbGetRevenueRecords(): Promise<RevenueRecord[]> {
+  try {
+    return await withStore<RevenueRecord[]>(
+      STORE_REVENUE,
+      "readonly",
+      (s) => s.getAll() as IDBRequest<RevenueRecord[]>
+    );
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get revenue records failed", err);
+    return [];
+  }
+}
+
+export async function idbGetRevenueRecord(
+  profileId: string
+): Promise<RevenueRecord | undefined> {
+  try {
+    return await withStore<RevenueRecord | undefined>(
+      STORE_REVENUE,
+      "readonly",
+      (s) => s.get(profileId) as IDBRequest<RevenueRecord | undefined>
+    );
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get revenue record failed", err);
+    return undefined;
+  }
+}
+
+export async function idbPutRevenueRecord(record: RevenueRecord): Promise<void> {
+  await withStore(STORE_REVENUE, "readwrite", (s) => s.put(record));
+}
+
+export async function idbBulkPutRevenueRecords(records: RevenueRecord[]): Promise<void> {
+  if (!records.length) return;
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_REVENUE, "readwrite");
+      const store = tx.objectStore(STORE_REVENUE);
+      for (const rec of records) store.put(rec);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+export async function idbDeleteRevenueRecord(profileId: string): Promise<void> {
+  try {
+    await withStore(STORE_REVENUE, "readwrite", (s) => s.delete(profileId));
+  } catch (err) {
+    console.warn("[video-affiliate-manager] delete revenue record failed", err);
   }
 }
