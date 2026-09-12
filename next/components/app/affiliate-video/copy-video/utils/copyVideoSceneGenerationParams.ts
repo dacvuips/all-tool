@@ -72,11 +72,14 @@ export function buildCopyVideoVideoPrompt(scene: CopyVideoScene, isStitch?: bool
 export async function buildCopyVideoVideoGenerateParams(options: {
   scene: CopyVideoScene;
   scriptData?: CopyVideoScriptLike;
+  /** Fallback khi scriptData chưa có videoDurationS */
+  videoDurationS?: number;
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
 }): Promise<GenerateVideoParams> {
-  const { scene, scriptData, isStitch, generatedImage, nextGeneratedImage } = options;
+  const { scene, scriptData, videoDurationS, isStitch, generatedImage, nextGeneratedImage } =
+    options;
 
   let images: GenerateVideoParams["images"];
   if (isStitch) {
@@ -96,6 +99,7 @@ export async function buildCopyVideoVideoGenerateParams(options: {
     prompt: buildCopyVideoVideoPrompt(scene, isStitch),
     images,
     aspectRatio: scriptData?.aspectRatio,
+    videoDurationS,
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,

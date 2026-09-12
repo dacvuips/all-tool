@@ -823,6 +823,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           const videoParams = await buildReviewVideoGenerateParams({
             scene,
             scriptData,
+            videoDurationS: reviewFormConfig?.videoDurationS,
             generatedImage: sceneImage,
           });
           await generateVideo(
@@ -954,6 +955,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           const videoParams = await buildReviewVideoGenerateParams({
             scene,
             scriptData,
+            videoDurationS: reviewFormConfig?.videoDurationS,
             isStitch: true,
             generatedImage: startImage,
             nextGeneratedImage: endImage,
@@ -1113,6 +1115,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
             const videoParams = await buildReviewVideoGenerateParams({
               scene,
               scriptData,
+              videoDurationS: reviewFormConfig?.videoDurationS,
               generatedImage: sceneImage,
             });
             await generateVideo(
@@ -1148,6 +1151,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
             const videoParams = await buildReviewVideoGenerateParams({
               scene,
               scriptData,
+              videoDurationS: reviewFormConfig?.videoDurationS,
               isStitch: true,
               generatedImage: startImage,
               nextGeneratedImage: endImage,

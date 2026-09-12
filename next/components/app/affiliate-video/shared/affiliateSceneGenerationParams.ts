@@ -108,6 +108,7 @@ export type AffiliateScriptLike =
       voiceTone?: string;
       artStyle?: string;
       artStyleId?: string;
+      videoDurationS?: number;
     }
   | null
   | undefined;
@@ -251,6 +252,8 @@ export async function buildAffiliateVideoGenerateParams(options: {
   scriptData?: AffiliateScriptLike;
   /** Fallback khi scriptData chưa có aspectRatio */
   aspectRatio?: string;
+  /** Fallback khi scriptData chưa có videoDurationS */
+  videoDurationS?: number;
   isStitch?: boolean;
   /**
    * Audio/Image to Video: mode `component` (thành phần).
@@ -277,6 +280,7 @@ export async function buildAffiliateVideoGenerateParams(options: {
     scene,
     scriptData,
     aspectRatio,
+    videoDurationS,
     isStitch,
     useComponentVideo,
     generatedImage,
@@ -337,6 +341,7 @@ export async function buildAffiliateVideoGenerateParams(options: {
     ),
     images,
     aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
+    videoDurationS: scriptData?.videoDurationS ?? videoDurationS,
     videoMode: useComponentVideo
       ? Flow2VideoModeEnum.COMPONENT
       : resolveAffiliateVideoMode({ isStitch, scene, requireImageBeforeVideo }),

@@ -53,6 +53,8 @@ export type FilmGenerateVideoParams = {
   prompt: string;
   images?: FilmMediaImageRef[];
   aspectRatio?: "16:9" | "9:16";
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: 8 | 6 | 4;
   videoMode?: string;
   serviceImageType?: string;
   generateAudio?: boolean;
@@ -278,6 +280,7 @@ export async function enqueueFilmVideo(
       prompt,
       images: params.images,
       aspectRatio: params.aspectRatio || "9:16",
+      videoDurationS: params.videoDurationS,
       videoMode: params.videoMode,
       serviceImageType: params.serviceImageType,
       generateAudio: params.generateAudio,

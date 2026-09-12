@@ -14,6 +14,7 @@ import logger from "../../../helpers/logger";
 import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { FLOW2_VIDEO_MODE } from "../../api-media/flow2/video-mode";
+import { normalizeFlow2VideoDurationS } from "../../api-media/flow2/video-duration";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { checkVideoLimit } from "./_shared";
 
@@ -46,6 +47,7 @@ export default [
           videoModel?: string;
           videoQuality?: string;
           voice?: string;
+          videoDurationS?: number;
           config?: {
             prompt?: string;
             aspectRatio?: "16:9" | "9:16";
@@ -55,6 +57,7 @@ export default [
             videoQuality?: string;
             videoMode?: string;
             voice?: string;
+            videoDurationS?: number;
           };
           _metadata?: Record<string, unknown>;
         };
@@ -111,6 +114,10 @@ export default [
             body.config?.videoModel
         );
 
+        const videoDurationS = normalizeFlow2VideoDurationS(
+          body.videoDurationS ?? body.config?.videoDurationS
+        );
+
         await checkVideoLimit(context.id);
 
         const { _metadata, ...rest } = body;
@@ -130,6 +137,7 @@ export default [
             variantCount,
             videosPerJob: variantCount,
             videoQuality,
+            videoDurationS,
           },
         };
 

@@ -594,6 +594,7 @@ export function useReviewSceneMedia({
       const videoParams = await buildReviewVideoGenerateParams({
         scene,
         scriptData,
+        videoDurationS: reviewFormConfig?.videoDurationS,
         isStitch,
         generatedImage: isStitch ? stitchStartImage : generatedImage,
         nextGeneratedImage: isStitch ? stitchEndImage : undefined,

@@ -16,6 +16,7 @@ import { ElementFormImage, StoryModeTypeEnum } from "../../constants";
 import { ElementImagesUpload } from "../../elements/sibar/element-images-upload";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { AspectRatioPicker } from "../../shared/aspect-ratio-picker";
+import { VideoDurationPicker } from "../../shared/video-duration-picker";
 import { getStoryboardSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ProductImagesUpload } from "../../shared/product-images-upload";
@@ -173,6 +174,14 @@ export const AffiliateConfig = ({
               <AspectRatioPicker
                 value={videoConfig?.aspectRatio}
                 onChange={(aspectRatio) => patchConfig && patchConfig({ aspectRatio })}
+              />
+            </Field>
+          </div>
+          <div id="video-duration-section">
+            <Field noError name="videoDurationS" label={t("Thời lượng video")}>
+              <VideoDurationPicker
+                value={videoConfig?.videoDurationS}
+                onChange={(videoDurationS) => patchConfig && patchConfig({ videoDurationS })}
               />
             </Field>
           </div>

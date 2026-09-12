@@ -728,6 +728,7 @@ export function useSceneMedia({
         scene,
         scriptData,
         aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+        videoDurationS: affiliateVideoFormConfig?.videoDurationS,
         isStitch,
         useComponentVideo,
         generatedImage: videoRefImage,

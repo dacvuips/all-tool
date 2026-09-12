@@ -18,6 +18,7 @@ import {
 } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { AspectRatioPicker } from "../../shared/aspect-ratio-picker";
+import { VideoDurationPicker } from "../../shared/video-duration-picker";
 import { ProductImagesUpload } from "../../shared/product-images-upload";
 
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
@@ -150,6 +151,17 @@ export const AffiliateConfig = () => {
               onChange={(aspectRatio) => {
                 if (patchConfig) patchConfig({ aspectRatio });
                 if (formContext) formContext.setValue("aspectRatio", aspectRatio);
+              }}
+            />
+          </Field>
+        </div>
+        <div>
+          <Field noError name="videoDurationS" label={t("Thời lượng video")}>
+            <VideoDurationPicker
+              value={videoConfig?.videoDurationS}
+              onChange={(videoDurationS) => {
+                if (patchConfig) patchConfig({ videoDurationS });
+                if (formContext) formContext.setValue("videoDurationS", videoDurationS);
               }}
             />
           </Field>

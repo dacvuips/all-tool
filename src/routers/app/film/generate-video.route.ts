@@ -24,6 +24,7 @@ import {
 } from "../../../queues/media-generation/handlers/film-job.types";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { checkVideoLimit } from "../affiliate-scene/_shared";
+import { normalizeFlow2VideoDurationS } from "../../api-media/flow2/video-duration";
 import { authFilmFeature } from "./_film-access";
 
 export default [
@@ -44,6 +45,8 @@ export default [
           generateAudio?: boolean;
           voice?: string;
           noText?: boolean;
+          /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+          videoDurationS?: number;
           /** ID collection artstyles — handler resolve prompt gắn vào prompt tạo video */
           artStyleId?: string;
           filmProjectId?: string;
@@ -76,6 +79,7 @@ export default [
           aspectRatio: body.aspectRatio || "9:16",
           videoMode: body.videoMode,
           serviceImageType: body.serviceImageType,
+          videoDurationS: normalizeFlow2VideoDurationS(body.videoDurationS),
           generateAudio: body.generateAudio,
           voice: typeof body.voice === "string" ? body.voice.trim() || undefined : undefined,
           noText: body.noText === true,

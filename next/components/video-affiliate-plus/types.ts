@@ -158,6 +158,8 @@ export interface GenerateVideoSlotConfig {
   actionV2Id: string;
   imageModel: string;
   videoModel: string;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS: 8 | 6 | 4;
   quality: string;
 }
 
@@ -189,6 +191,8 @@ export interface GenerateVideoConfig {
   musicUrl: string;
   imageModel: string;
   videoModel: string;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS: 8 | 6 | 4;
   videosPerJob: number;
   /**
    * Tách mỗi video thành 1 job generate riêng (variantCount=1) với prompt/config riêng.
@@ -1190,6 +1194,7 @@ export const DEFAULT_GENERATE_VIDEO_CONFIG: GenerateVideoConfig = {
   musicUrl: "",
   imageModel: "nano-banana-pro",
   videoModel: "0-credit",
+  videoDurationS: 8,
   videosPerJob: 2,
   splitPrompt: false,
   autoDownloadAfterGen: true,
@@ -1369,6 +1374,7 @@ export function createSlotConfigFromRoot(config: GenerateVideoConfig): GenerateV
     actionV2Id: config.actionV2Id,
     imageModel: config.imageModel,
     videoModel: config.videoModel,
+    videoDurationS: config.videoDurationS ?? 8,
     quality: config.quality,
   };
 }

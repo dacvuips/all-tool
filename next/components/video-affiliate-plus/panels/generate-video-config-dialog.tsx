@@ -312,6 +312,7 @@ export function GenerateVideoConfigDialog({
               actionV2Id: updated.actionV2Id,
               imageModel: updated.imageModel,
               videoModel: updated.videoModel,
+              videoDurationS: updated.videoDurationS,
               quality: updated.quality,
             }
           : {};
@@ -608,6 +609,7 @@ export function GenerateVideoConfigDialog({
         actionV2Id: root.actionV2Id,
         imageModel: root.imageModel,
         videoModel: root.videoModel,
+        videoDurationS: root.videoDurationS,
         quality: root.quality,
       };
     } else {
@@ -1121,6 +1123,19 @@ export function GenerateVideoConfigDialog({
                       <HiPlay />
                       {t("Play")}
                     </button>
+                  </FieldRow>
+
+                  <FieldRow label={t("Thời lượng video")}>
+                    <NativeSelect
+                      value={String(activeSlot.videoDurationS ?? 8)}
+                      onChange={(v) =>
+                        patchSlot({ videoDurationS: (Number(v) || 8) as 8 | 6 | 4 })
+                      }
+                      options={[8, 6, 4].map((n) => ({
+                        value: String(n),
+                        label: `${n}s`,
+                      }))}
+                    />
                   </FieldRow>
 
                   <FieldRow label={t("Kỹ Thuật")}>

@@ -14,6 +14,7 @@ import {
 } from "react-icons/hi";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import type { GeneratedVideoData } from "../app/affiliate-video/shared/scene-card-video-tab";
+import { VideoDurationPillPicker } from "../shared/common/video-duration-pill-picker";
 import { Button } from "../shared/utilities/form";
 import { Dropdown } from "../shared/utilities/popover/dropdown";
 import type { FilmAttachOption } from "./film-attach-fields";
@@ -90,6 +91,9 @@ type Props = {
     slots: Array<FilmVideoRefSlot | null>
   ) => void | Promise<void>;
   videoRefMode?: FilmVideoRefMode;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: 8 | 6 | 4;
+  onVideoDurationSChange?: (duration: 8 | 6 | 4) => void;
 };
 
 const TABS: { id: FilmStoryboardTab; label: string }[] = [
@@ -121,6 +125,8 @@ export default function FilmCreateVideoPanel({
   onVideoRefModeChange,
   onVideoRefSlotsChange,
   videoRefMode: videoRefModeProp = FILM_VIDEO_REF_MODE_DEFAULT,
+  videoDurationS = 8,
+  onVideoDurationSChange,
 }: Props) {
   const { t } = useTranslation();
   const bulkBtnRef = useRef<HTMLButtonElement>(null);
@@ -508,6 +514,13 @@ export default function FilmCreateVideoPanel({
                 );
               })}
             </div>
+          </div>
+
+          <div className="flex justify-center items-center w-full min-w-0 mt-2">
+            <VideoDurationPillPicker
+              value={videoDurationS}
+              onChange={(duration) => onVideoDurationSChange?.(duration)}
+            />
           </div>
         </div>
 

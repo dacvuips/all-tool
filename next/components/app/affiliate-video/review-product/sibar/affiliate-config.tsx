@@ -11,6 +11,7 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { AspectRatioPicker } from "../../shared/aspect-ratio-picker";
+import { VideoDurationPicker } from "../../shared/video-duration-picker";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { getReviewSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
@@ -51,6 +52,14 @@ export const AffiliateConfig = ({
           <AspectRatioPicker
             value={reviewFormConfig?.aspectRatio}
             onChange={(aspectRatio) => patchConfig && patchConfig({ aspectRatio })}
+          />
+        </Field>
+        </div>
+        <div id="video-duration-section">
+        <Field noError name="videoDurationS" label={t("Thời lượng video")}>
+          <VideoDurationPicker
+            value={reviewFormConfig?.videoDurationS}
+            onChange={(videoDurationS) => patchConfig && patchConfig({ videoDurationS })}
           />
         </Field>
         </div>

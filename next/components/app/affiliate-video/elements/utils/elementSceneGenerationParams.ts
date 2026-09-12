@@ -233,6 +233,8 @@ export async function buildElementVideoGenerateParams(options: {
   scriptData?: ElementScriptLike;
   /** Fallback khi scriptData chưa có aspectRatio */
   aspectRatio?: string;
+  /** Fallback khi scriptData chưa có videoDurationS */
+  videoDurationS?: number;
   /** Fallback khi scriptData chưa có serviceImageType */
   serviceImageType?: ServiceImageEnum;
   isStitch?: boolean;
@@ -249,6 +251,7 @@ export async function buildElementVideoGenerateParams(options: {
     scene,
     scriptData,
     aspectRatio,
+    videoDurationS,
     serviceImageType,
     isStitch,
     generatedImage,
@@ -306,6 +309,7 @@ export async function buildElementVideoGenerateParams(options: {
     prompt: buildElementVideoPrompt(scene, isStitch),
     images,
     aspectRatio: resolveElementAspectRatio(scriptData, aspectRatio),
+    videoDurationS,
     serviceImageType: resolvedServiceImageType,
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,

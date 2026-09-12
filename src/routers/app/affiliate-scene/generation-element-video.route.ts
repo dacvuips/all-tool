@@ -11,6 +11,7 @@ import { ServiceImageEnum } from "../constanst";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { checkVideoLimit, Flow2VideoMode } from "./_shared";
+import { normalizeFlow2VideoDurationS } from "../../api-media/flow2/video-duration";
 
 export default [
   {
@@ -39,6 +40,7 @@ export default [
             artStyle?: string;
             serviceImageType?: ServiceImageEnum;
             videoMode?: Flow2VideoMode;
+            videoDurationS?: number;
           };
           _metadata?: Record<string, unknown>;
         };
@@ -50,6 +52,11 @@ export default [
         await checkVideoLimit(context.id);
 
         const { _metadata, ...requestPayload } = body;
+        if (requestPayload.config) {
+          requestPayload.config.videoDurationS = normalizeFlow2VideoDurationS(
+            requestPayload.config.videoDurationS
+          );
+        }
 
         const { jobId, status } = await createAndEnqueueMediaJob({
           customerId: context.id,

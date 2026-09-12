@@ -40,6 +40,8 @@ export type GenerationElementVideoPayload = {
     serviceImageType?: ServiceImageEnum;
     /** frame = startImage/endImage; component = Reference */
     videoMode?: Flow2VideoMode | string;
+    /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+    videoDurationS?: number;
   };
 };
 
@@ -67,6 +69,7 @@ export async function handleGenerationElementVideo(
     customerId: job.customerId,
     prompt: videoPrompt,
     aspectRatio: payload.config?.aspectRatio,
+    videoDurationS: payload.config?.videoDurationS,
     images: payload.images,
     videoMode: payload.config?.videoMode,
     serviceImageType: payload.config?.serviceImageType,

@@ -1,10 +1,16 @@
-import type { AspectRatio, ElementFormAudio, ElementFormImage } from "../constants";
+import type {
+  AspectRatio,
+  ElementFormAudio,
+  ElementFormImage,
+  VideoDurationS,
+} from "../constants";
 
 export type SourceTab = "audio" | "image" | "text";
 
 export type AudioImageToVideoFormState = {
   sourceTab: SourceTab;
   aspectRatio: AspectRatio;
+  videoDurationS?: VideoDurationS;
   language: string;
   artStyle: string;
   artStyleId: string;

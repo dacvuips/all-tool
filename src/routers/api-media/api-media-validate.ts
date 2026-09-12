@@ -7,6 +7,7 @@ import {
 } from "./flow2/video-mode";
 import {
   API_MEDIA_ASPECT_RATIOS,
+  API_MEDIA_DEFAULT_VIDEO_DURATION_S,
   API_MEDIA_IMAGE_INPUT_MAX,
   API_MEDIA_IMAGE_MODELS,
   API_MEDIA_OMNI_COMPONENT_IMAGE_MAX,
@@ -15,8 +16,10 @@ import {
   API_MEDIA_OMNI_COMPONENT_WITH_VIDEO_IMAGE_MAX,
   API_MEDIA_OMNI_DURATIONS,
   API_MEDIA_OMNI_FRAME_IMAGE_MAX,
+  API_MEDIA_VIDEO_DURATIONS,
   ApiMediaAspectRatio,
   ApiMediaOmniDuration,
+  ApiMediaVideoDuration,
   ApiMediaVideoQuality,
   isApiMediaOmniQuality,
 } from "./api-media-constants";
@@ -147,6 +150,16 @@ function parseOmniDuration(value: unknown, required: boolean): ApiMediaOmniDurat
   return n as ApiMediaOmniDuration;
 }
 
+/** videoDurationS cho videoQuality không phải omni_flash — mặc định 8s khi không gửi. */
+function parseVideoDuration(value: unknown): ApiMediaVideoDuration {
+  if (value == null || value === "") return API_MEDIA_DEFAULT_VIDEO_DURATION_S;
+  const n = Number(value);
+  if (!API_MEDIA_VIDEO_DURATIONS.includes(n as ApiMediaVideoDuration)) {
+    badRequest(`videoDurationS không hợp lệ. Hỗ trợ: ${API_MEDIA_VIDEO_DURATIONS.join(", ")} giây`);
+  }
+  return n as ApiMediaVideoDuration;
+}
+
 function resolveVideoMode(
   explicit: string | undefined,
   imageCount: number,
@@ -267,8 +280,8 @@ export function validateApiMediaVideoRequest(body: Record<string, unknown>): Api
     } else {
       videoDurationS = parseOmniDuration(configRaw.videoDurationS, true)!;
     }
-  } else if (configRaw.videoDurationS != null && configRaw.videoDurationS !== "") {
-    badRequest("videoDurationS chỉ áp dụng khi videoQuality = omni_flash");
+  } else {
+    videoDurationS = parseVideoDuration(configRaw.videoDurationS);
   }
 
   if (videos.length > 0 && !isOmni) {

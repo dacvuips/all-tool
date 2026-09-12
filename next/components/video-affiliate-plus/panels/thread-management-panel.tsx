@@ -1637,6 +1637,7 @@ export function ThreadManagementPanel({
               characterPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>[];
               productPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>;
               videoModel: string;
+              videoDurationS?: 8 | 6 | 4;
               voice?: string;
               slotIndex?: number;
             }) => {
@@ -1669,6 +1670,7 @@ export function ThreadManagementPanel({
                             videosPerJob: 1,
                             variantCount: 1,
                             videoModel: opts.videoModel,
+                            videoDurationS: opts.videoDurationS,
                             videoMode: "component",
                             voice,
                           },
@@ -1832,6 +1834,7 @@ export function ThreadManagementPanel({
                       characterPrepared,
                       productPrepared,
                       videoModel: slot.videoModel || config!.videoModel,
+                      videoDurationS: slot.videoDurationS ?? config!.videoDurationS,
                       voice: slot.voice || config!.voice,
                       slotIndex,
                     });
@@ -1991,6 +1994,7 @@ export function ThreadManagementPanel({
                               videosPerJob: config!.videosPerJob,
                               variantCount: config!.videosPerJob,
                               videoModel: config!.videoModel,
+                              videoDurationS: config!.videoDurationS,
                               videoMode: "component",
                               voice,
                             },
@@ -2628,6 +2632,7 @@ export function ThreadManagementPanel({
                     videosPerJob: 1,
                     variantCount: 1,
                     videoModel: slot.videoModel || config.videoModel,
+                    videoDurationS: slot.videoDurationS ?? config.videoDurationS,
                     videoMode: "component",
                     voice,
                   },

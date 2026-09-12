@@ -104,6 +104,8 @@ export type WolfGenerationImageInput = {
 export type WolfGenerationVideoInput = {
   prompt: string;
   aspectRatio: WolfVideoAspectRatio;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: 8 | 6 | 4;
   videoMode: WolfVideoMode;
   multiplier: WolfMultiplier;
   referenceAssets: WolfMediaAsset[];
@@ -298,6 +300,7 @@ export function buildWolfVideoGenerationBody(input: WolfGenerationVideoInput) {
     video_mode: videoMode,
     config: {
       aspectRatio: input.aspectRatio,
+      videoDurationS: input.videoDurationS,
       videoMode,
     },
   };

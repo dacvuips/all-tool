@@ -164,6 +164,8 @@ export interface GenerateVideoParams {
   >;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: number;
   /**
    * Flow2 video_mode:
    * - frame: khung ảnh (start / start+end)
@@ -1531,6 +1533,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         prompt,
         images,
         aspectRatio,
+        videoDurationS,
         generateAudio,
         noText,
         voiceDisable,
@@ -1566,6 +1569,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             artStyle: artStyle || undefined,
             config: {
               aspectRatio,
+              videoDurationS,
               generateAudio: resolvedGenerateAudio,
               noText,
               voiceDisable,

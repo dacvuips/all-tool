@@ -102,6 +102,7 @@ export interface ReviewFormConfig {
   /** Video tham chiếu cho chế độ video-to-video (có thể upload nhiều video) */
   videoRef?: ReviewFormVideo[];
   aspectRatio: AspectRatio;
+  videoDurationS?: 8 | 6 | 4;
   language: string;
   artStyle: string;
   artStyleId?: string;

@@ -19,6 +19,8 @@ export type RunFlow2VideoPipelineArgs = {
   prompt: string;
   aspectRatio?: ApiMediaAspectRatio;
   videoQuality?: string;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: number;
   /** Số biến thể video / job */
   variantCount?: number;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
@@ -43,6 +45,7 @@ export async function runFlow2VideoPipeline(
     prompt,
     aspectRatio,
     videoQuality,
+    videoDurationS,
     variantCount,
     images = [],
     videoMode,
@@ -72,6 +75,7 @@ export async function runFlow2VideoPipeline(
     prompt,
     aspectRatio,
     videoQuality,
+    videoDurationS,
     variantCount,
     imageInputs: images,
     videoMode: resolvedVideoMode,

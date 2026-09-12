@@ -346,6 +346,8 @@ export default function FilmWorkspace({ projectId }: Props) {
   const [videoRefMode, setVideoRefMode] = useState<FilmVideoRefMode>(
     FILM_VIDEO_REF_MODE_DEFAULT
   );
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  const [videoDurationS, setVideoDurationS] = useState<8 | 6 | 4>(8);
 
   const markStopPending = useCallback((id: string, pending: boolean) => {
     setStopPendingIds((prev) => {
@@ -4265,6 +4267,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         prompt,
         images: images.length ? images : undefined,
         aspectRatio,
+        videoDurationS,
         videoMode,
         serviceImageType,
         generateAudio: silentLipSync ? false : undefined,
@@ -5454,6 +5457,8 @@ export default function FilmWorkspace({ projectId }: Props) {
               videoRefMode={videoRefMode}
               onVideoRefModeChange={handleVideoRefModeChange}
               onVideoRefSlotsChange={handleVideoRefSlotsChange}
+              videoDurationS={videoDurationS}
+              onVideoDurationSChange={setVideoDurationS}
               onSaveScene={handleSaveScene}
               onDownloadAll={handleDownloadAllVideos}
               onTabNavigate={(tab) => {

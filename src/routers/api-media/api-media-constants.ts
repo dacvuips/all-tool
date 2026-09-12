@@ -42,6 +42,11 @@ export type ApiMediaVideoQuality = (typeof API_MEDIA_VIDEO_QUALITIES)[number];
 export const API_MEDIA_OMNI_DURATIONS = [4, 6, 8, 10] as const;
 export type ApiMediaOmniDuration = (typeof API_MEDIA_OMNI_DURATIONS)[number];
 
+/** Thời lượng video (giây) áp dụng cho mọi videoQuality không phải omni_flash. */
+export const API_MEDIA_VIDEO_DURATIONS = [8, 6, 4] as const;
+export type ApiMediaVideoDuration = (typeof API_MEDIA_VIDEO_DURATIONS)[number];
+export const API_MEDIA_DEFAULT_VIDEO_DURATION_S: ApiMediaVideoDuration = 8;
+
 export const API_MEDIA_VEO_COMPONENT_IMAGE_MAX = 3;
 export const API_MEDIA_VEO_FRAME_IMAGE_MAX = 2;
 

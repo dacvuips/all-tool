@@ -23,6 +23,10 @@ import {
   Flow2VideoMode,
   resolveFlow2VideoMode,
 } from "./video-mode";
+import { Flow2VideoDurationS, normalizeFlow2VideoDurationS } from "./video-duration";
+
+export type { Flow2VideoDurationS } from "./video-duration";
+export { FLOW2_VIDEO_DURATIONS, DEFAULT_FLOW2_VIDEO_DURATION_S } from "./video-duration";
 
 export type { Flow2VideoMode } from "./video-mode";
 export {
@@ -64,6 +68,8 @@ export type Flow2CreateVideoRequestParams = {
   imageInputs?: Flow2ImageInput[];
   aspectRatio?: ApiMediaAspectRatio;
   videoQuality?: Flow2VideoQuality;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: Flow2VideoDurationS | number;
   /**
    * Chế độ ảnh trên Flow2 (`video_mode`):
    * - `frame` — prompt-only, startImage (1 ảnh) hoặc startImage + endImage (2 ảnh)
@@ -280,6 +286,7 @@ export async function createFlow2VideoRequest(
   const imageInputs = (params.imageInputs || []).slice(0, MAX_FLOW2_VIDEO_IMAGES);
   const aspect_ratio = params.aspectRatio || "16:9";
   const video_quality = params.videoQuality || DEFAULT_VIDEO_QUALITY;
+  const video_duration_s = normalizeFlow2VideoDurationS(params.videoDurationS);
   const flow2Opts = params.customerId ? { customerId: params.customerId } : undefined;
 
   // Text-to-video — không cần ảnh, không có video_mode
@@ -291,6 +298,7 @@ export async function createFlow2VideoRequest(
           prompt: params.prompt,
           aspect_ratio,
           video_quality,
+          video_duration_s,
         },
       },
       flow2Opts
@@ -325,6 +333,7 @@ export async function createFlow2VideoRequest(
         image_base64s,
         video_mode,
         video_quality,
+        video_duration_s,
         variant_count,
         ...(voice ? { voice } : {}),
       },

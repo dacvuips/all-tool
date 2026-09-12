@@ -108,11 +108,14 @@ export function buildReviewImageGenerateParams(options: {
 export async function buildReviewVideoGenerateParams(options: {
   scene: ReviewScene;
   scriptData?: ElementScriptLike;
+  /** Fallback khi scriptData chưa có videoDurationS */
+  videoDurationS?: number;
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
 }): Promise<GenerateVideoParams> {
-  const { scene, scriptData, isStitch, generatedImage, nextGeneratedImage } = options;
+  const { scene, scriptData, videoDurationS, isStitch, generatedImage, nextGeneratedImage } =
+    options;
 
   let images: GenerateVideoParams["images"];
 
@@ -146,6 +149,7 @@ export async function buildReviewVideoGenerateParams(options: {
     prompt: buildReviewVideoPrompt(scene, isStitch),
     images,
     aspectRatio: scriptData?.aspectRatio,
+    videoDurationS,
     serviceImageType: resolvedServiceImageType,
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,

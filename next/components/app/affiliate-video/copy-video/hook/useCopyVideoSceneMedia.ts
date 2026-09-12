@@ -566,6 +566,7 @@ export function useCopyVideoSceneMedia({
       const videoParams = await buildCopyVideoVideoGenerateParams({
         scene,
         scriptData,
+        videoDurationS: copyVideoFormConfig?.videoDurationS,
         isStitch,
         generatedImage: isStitch ? stitchStartImage : generatedImage,
         nextGeneratedImage: isStitch ? stitchEndImage : undefined,

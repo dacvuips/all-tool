@@ -52,6 +52,7 @@ export interface VideoFormBase {
   artStyle: string;
   artStyleId?: string;
   aspectRatio: AspectRatio;
+  videoDurationS?: VideoDurationS;
 }
 export interface AffiliateVideoFormConfig extends VideoFormBase {
   objectToPersonify: string;
@@ -149,6 +150,7 @@ export interface ElementFormConfig {
   /** Video tham chiếu cho chế độ video-to-video (có thể upload nhiều video) */
   videoRef?: ElementFormVideo[];
   aspectRatio: AspectRatio;
+  videoDurationS?: VideoDurationS;
   artStyle: string;
   artStyleId?: string;
   serviceImageType?: ServiceImageEnum;
@@ -179,8 +181,10 @@ export const ASPECT_RATIOS: {
   { value: "3:4", label: "3:4 Portrait", icon: "📱", orientation: "portrait" },
 ];
 
-// ── Duration Options (seconds) ─────────────────────────────────────────────
-export const DURATION_OPTIONS = [5, 6, 7, 8];
+// ── Video Duration Options (seconds) ───────────────────────────────────────
+export type VideoDurationS = 8 | 6 | 4;
+export const VIDEO_DURATION_OPTIONS: VideoDurationS[] = [8, 6, 4];
+export const DEFAULT_VIDEO_DURATION_S: VideoDurationS = 8;
 
 // ── Built-in TTS Voice Options ─────────────────────────────────────────────
 

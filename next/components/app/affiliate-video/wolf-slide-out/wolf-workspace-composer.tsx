@@ -70,6 +70,13 @@ const MPOINT_VIDEO_MODELS = new Set<string>(["Veo 3.1 Quality", "Veo 3.1 Fast", 
 
 const ALL_DURATIONS: Duration[] = ["4s", "6s", "8s", "10s"];
 const DURATIONS_WITHOUT_10S: Duration[] = ["4s", "6s", "8s"];
+
+/** Map UI duration → videoDurationS (Flow2 chung chỉ hỗ trợ 8|6|4; Omni 10s xử lý riêng). */
+function parseWolfDurationSeconds(value: Duration): 8 | 6 | 4 {
+  if (value === "4s") return 4;
+  if (value === "6s") return 6;
+  return 8;
+}
 const OMNI_FLASH_MODEL = "Omni Flash";
 
 function isMPointVideoModel(model: string): boolean {
@@ -533,6 +540,7 @@ export function WolfWorkspaceComposer({
           ? {
               prompt: currentPrompt,
               aspectRatio: videoAspectRatio,
+              videoDurationS: parseWolfDurationSeconds(duration),
               videoMode,
               multiplier,
               referenceAssets: attachedAssets,
@@ -545,6 +553,7 @@ export function WolfWorkspaceComposer({
     alert,
     attachedAssets,
     customer,
+    duration,
     endFrameAsset,
     imageAspectRatio,
     imageModelKey,

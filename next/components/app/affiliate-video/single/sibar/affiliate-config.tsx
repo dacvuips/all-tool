@@ -26,6 +26,7 @@ import {
 } from "../../../../shared/utilities/form";
 import { StoryModeTypeEnum, TAB_TYPE, TrendingModeTypeEnum } from "../../constants";
 import { AspectRatioPicker } from "../../shared/aspect-ratio-picker";
+import { VideoDurationPicker } from "../../shared/video-duration-picker";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { ProductImagesUpload } from "../../shared/product-images-upload";
 import { getSingleSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
@@ -247,6 +248,15 @@ export const AffiliateConfig = ({
               <AspectRatioPicker
                 value={videoConfig?.aspectRatio}
                 onChange={(aspectRatio) => patchConfig && patchConfig({ aspectRatio })}
+              />
+            </Field>
+          </div>
+          {/* THỜI LƯỢNG VIDEO */}
+          <div id="video-duration-section">
+            <Field noError name="videoDurationS" label={t("Thời lượng video")}>
+              <VideoDurationPicker
+                value={videoConfig?.videoDurationS}
+                onChange={(videoDurationS) => patchConfig && patchConfig({ videoDurationS })}
               />
             </Field>
           </div>

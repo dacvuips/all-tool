@@ -19,6 +19,7 @@ import {
   type ScriptData,
 } from "../constants";
 import { AspectRatioPicker } from "../shared/aspect-ratio-picker";
+import { VideoDurationPicker } from "../shared/video-duration-picker";
 import { ElementAudioUpload, ElementImagesUpload } from "../elements/sibar/element-images-upload";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { AffiliateVideoSidebarLayout } from "../shared/affiliate-video-sidebar-layout";
@@ -160,6 +161,14 @@ function AudioImageToVideoSidebar({
               <AspectRatioPicker
                 value={form.aspectRatio}
                 onChange={(aspectRatio) => onChange({ aspectRatio })}
+              />
+            </Field>
+          </div>
+          <div id="video-duration-section">
+            <Field noError name="videoDurationS" label={t("Thời lượng video")}>
+              <VideoDurationPicker
+                value={form.videoDurationS}
+                onChange={(videoDurationS) => onChange({ videoDurationS })}
               />
             </Field>
           </div>

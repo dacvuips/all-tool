@@ -590,6 +590,7 @@ export function useElementSceneMedia({
         scene,
         scriptData,
         aspectRatio: elementFormConfig?.aspectRatio,
+        videoDurationS: elementFormConfig?.videoDurationS,
         serviceImageType: elementFormConfig?.serviceImageType,
         isStitch,
         generatedImage: isStitch ? stitchStartImage : undefined,

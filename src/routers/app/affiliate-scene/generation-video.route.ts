@@ -10,6 +10,7 @@ import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { resolvePayloadPrompt } from "../../../queues/media-generation/handlers/_video-prompt";
+import { normalizeFlow2VideoDurationS } from "../../api-media/flow2/video-duration";
 import { checkVideoLimit } from "./_shared";
 
 export default [
@@ -39,6 +40,7 @@ export default [
             voice?: string;
             videoMode?: string;
             serviceImageType?: string;
+            videoDurationS?: number;
           };
           _metadata?: Record<string, unknown>;
         };
@@ -50,6 +52,11 @@ export default [
         await checkVideoLimit(context.id);
 
         const { _metadata, ...requestPayload } = body;
+        if (requestPayload.config) {
+          requestPayload.config.videoDurationS = normalizeFlow2VideoDurationS(
+            requestPayload.config.videoDurationS
+          );
+        }
         const { jobId, status } = await createAndEnqueueMediaJob({
           customerId: context.id,
           type: MediaGenerationJobType.GENERATION_VIDEO,

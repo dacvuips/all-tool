@@ -102,6 +102,8 @@ export interface GenerateVideoParams {
   >;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: number;
   /** Bật/tắt text (watermark/chữ) trong video tạo ra */
   noText?: boolean;
   /** Tắt thoại / audio trong video */
@@ -602,6 +604,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         prompt,
         images,
         aspectRatio,
+        videoDurationS,
         generateAudio,
         noText,
         voiceDisable,
@@ -631,6 +634,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
             voiceDisable,
             config: {
               aspectRatio,
+              videoDurationS,
               generateAudio: resolvedGenerateAudio,
               noText,
               voiceDisable,

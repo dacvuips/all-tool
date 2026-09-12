@@ -30,6 +30,8 @@ export type FilmGenerationVideoPayload = FilmJobContext & {
   aspectRatio?: "16:9" | "9:16";
   videoMode?: Flow2VideoMode | string;
   serviceImageType?: ServiceImageEnum | string;
+  /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+  videoDurationS?: number;
   generateAudio?: boolean;
   /** Giọng Flow2 — chỉ gắn khi component + có ảnh (lọc ở Flow2 create) */
   voice?: string;
@@ -95,6 +97,7 @@ export async function handleFilmGenerationVideo(
     customerId: job.customerId,
     prompt: fullPrompt,
     aspectRatio: payload.aspectRatio || "9:16",
+    videoDurationS: payload.videoDurationS,
     images: payload.images,
     videoMode: payload.videoMode,
     serviceImageType: payload.serviceImageType as ServiceImageEnum | undefined,

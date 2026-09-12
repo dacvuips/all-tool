@@ -850,6 +850,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const videoParams = await buildCopyVideoVideoGenerateParams({
             scene,
             scriptData,
+            videoDurationS: copyVideoFormConfig?.videoDurationS,
             generatedImage: existingImage,
           });
           await generateVideo(
@@ -982,6 +983,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const videoParams = await buildCopyVideoVideoGenerateParams({
             scene,
             scriptData,
+            videoDurationS: copyVideoFormConfig?.videoDurationS,
             isStitch: true,
             generatedImage: startImage,
             nextGeneratedImage: endImage,
@@ -1170,6 +1172,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             const videoParams = await buildCopyVideoVideoGenerateParams({
               scene,
               scriptData,
+              videoDurationS: copyVideoFormConfig?.videoDurationS,
               generatedImage: existingImage,
             });
             await generateVideo(
@@ -1205,6 +1208,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             const videoParams = await buildCopyVideoVideoGenerateParams({
               scene,
               scriptData,
+              videoDurationS: copyVideoFormConfig?.videoDurationS,
               isStitch: true,
               generatedImage: startImage,
               nextGeneratedImage: endImage,

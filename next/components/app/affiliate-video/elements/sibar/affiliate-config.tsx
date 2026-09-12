@@ -15,6 +15,7 @@ import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { AspectRatioPicker } from "../../shared/aspect-ratio-picker";
+import { VideoDurationPicker } from "../../shared/video-duration-picker";
 import { getElementSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { formatSocialPostHeaderTemplateForEnabledPlatforms, useAutoPostSocialPreferences } from "../../shared/auto-post-social";
@@ -154,6 +155,14 @@ export const AffiliateConfig = ({
               <AspectRatioPicker
                 value={elementFormConfig?.aspectRatio}
                 onChange={(aspectRatio) => patchConfig && patchConfig({ aspectRatio })}
+              />
+            </Field>
+          </div>
+          <div id="video-duration-section">
+            <Field noError name="videoDurationS" label={t("Thời lượng video")}>
+              <VideoDurationPicker
+                value={elementFormConfig?.videoDurationS}
+                onChange={(videoDurationS) => patchConfig && patchConfig({ videoDurationS })}
               />
             </Field>
           </div>

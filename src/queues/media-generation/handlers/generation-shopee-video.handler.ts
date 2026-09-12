@@ -32,6 +32,8 @@ export type GenerationShopeeVideoPayload = {
     videoQuality?: string;
     videoMode?: string;
     voice?: string;
+    /** Thời lượng video (giây) — 8 | 6 | 4, mặc định 8 */
+    videoDurationS?: number;
   };
 };
 
@@ -75,6 +77,7 @@ export async function handleGenerationShopeeVideo(
     prompt,
     aspectRatio: payload.config?.aspectRatio || "9:16",
     videoQuality,
+    videoDurationS: payload.config?.videoDurationS,
     variantCount,
     images,
     videoMode: FLOW2_VIDEO_MODE.COMPONENT,
