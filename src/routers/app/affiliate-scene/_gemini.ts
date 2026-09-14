@@ -387,7 +387,22 @@ function buildGeminiContents(
   ];
 }
 
-/** Gọi Gemini generateContent JSON — model/schema/media tùy từng route. */
+/**
+ * Nhúng yêu cầu xuất JSON + schema vào đầu prompt.
+ * Gemini generateContent không hỗ trợ ép schema đáng tin cậy cho mọi model/khoá,
+ * nên bắt buộc AI tuân theo schema bằng chỉ dẫn text, rồi tự parse JSON ở phía client.
+ */
+export function buildJsonInstructedPrompt(text: string, responseSchema: unknown): string {
+  return [
+    "BẮT BUỘC: Chỉ trả về DUY NHẤT một JSON object hợp lệ, không markdown, không code fence, không giải thích, không text nào khác ngoài JSON.",
+    "JSON trả về PHẢI khớp đúng schema sau (types, required fields, enum values):",
+    JSON.stringify(responseSchema),
+    "",
+    text,
+  ].join("\n");
+}
+
+/** Gọi Gemini generateContent JSON — schema được nhúng vào prompt (không dùng responseSchema). */
 export async function callGeminiJsonGenerate(params: {
   model: string;
   text: string;
@@ -398,16 +413,15 @@ export async function callGeminiJsonGenerate(params: {
   maxOutputTokens?: number;
   clients?: GeminiClientEntry[];
 }): Promise<string> {
+  const promptWithSchema = buildJsonInstructedPrompt(params.text, params.responseSchema);
   const response = await callGeminiWithRetry(
     (ai) =>
       ai.models.generateContent({
         model: params.model,
-        contents: buildGeminiContents(params.text, params.media),
+        contents: buildGeminiContents(promptWithSchema, params.media),
         config: {
           ...(params.temperature != null ? { temperature: params.temperature } : {}),
           ...(params.maxOutputTokens != null ? { maxOutputTokens: params.maxOutputTokens } : {}),
-          responseMimeType: "application/json",
-          responseSchema: params.responseSchema,
         },
       }),
     params.label,

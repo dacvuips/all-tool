@@ -4,14 +4,15 @@
  * API key đọc từ bảng Credential. Prompt (system + user) ghép trên backend.
  * Body: content, language, sceneCount, narration?, systemInstruction?, previousScenes? (kế thừa tập trước).
  *
- * Structured output:
- * - OpenAI: response_format json_schema (strict)
- * - Gemini: responseMimeType application/json + responseSchema
- * - Gateway: jsonSchema gắn vào prompt
+ * JSON output: không dùng response_format/responseSchema structured output (không đáng tin cậy
+ * trên mọi model/key). Thay vào đó, schema được nhúng thẳng vào đầu prompt (bắt buộc AI tuân
+ * theo) và kết quả text được parse bằng parseGeminiJsonResponse (hỗ trợ markdown fence, JSON kẹp
+ * trong text...).
  */
 import { GoogleGenAI } from "@google/genai";
 import { Request, Response } from "express";
 import logger from "../../../helpers/logger";
+import { buildJsonInstructedPrompt } from "../affiliate-scene/_gemini";
 import {
   callChatGPTGateway,
   checkRequestLimit,
@@ -448,6 +449,7 @@ async function callOpenAiJson(params: {
   openAiSchema: Record<string, unknown>;
 }): Promise<{ text: string; model: string }> {
   const model = OPENAI_MODEL;
+  const userPromptWithSchema = buildJsonInstructedPrompt(params.userPrompt, params.openAiSchema);
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -458,16 +460,8 @@ async function callOpenAiJson(params: {
       model,
       messages: [
         { role: "system", content: params.systemInstruction },
-        { role: "user", content: params.userPrompt },
+        { role: "user", content: userPromptWithSchema },
       ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "film_extract_screenplay",
-          strict: true,
-          schema: params.openAiSchema,
-        },
-      },
     }),
   });
   const bodyText = await resp.text().catch(() => "");
@@ -478,65 +472,8 @@ async function callOpenAiJson(params: {
     json = null;
   }
   if (!resp.ok) {
-    // Fallback: một số model/key không hỗ trợ json_schema strict → json_object
     const msg = String(json?.error?.message || bodyText.slice(0, 200) || "");
-    if (resp.status === 400 && /response_format|json_schema|strict/i.test(msg)) {
-      return callOpenAiJsonObjectFallback(params);
-    }
     const err: any = new Error(msg || `OpenAI HTTP ${resp.status}`);
-    err.statusCode = resp.status === 401 || resp.status === 403 ? resp.status : 502;
-    throw err;
-  }
-  const text = String(json?.choices?.[0]?.message?.content || "").trim();
-  if (!text) {
-    const err: any = new Error("OpenAI không trả về JSON phân cảnh");
-    err.statusCode = 502;
-    throw err;
-  }
-  return { text, model };
-}
-
-async function callOpenAiJsonObjectFallback(params: {
-  apiKey: string;
-  systemInstruction: string;
-  userPrompt: string;
-  openAiSchema: Record<string, unknown>;
-}): Promise<{ text: string; model: string }> {
-  const model = OPENAI_MODEL;
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${params.apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content: [
-            params.systemInstruction,
-            "",
-            "Output MUST match this JSON Schema exactly:",
-            JSON.stringify(params.openAiSchema),
-          ].join("\n"),
-        },
-        { role: "user", content: params.userPrompt },
-      ],
-      response_format: { type: "json_object" },
-    }),
-  });
-  const bodyText = await resp.text().catch(() => "");
-  let json: any = null;
-  try {
-    json = bodyText ? JSON.parse(bodyText) : null;
-  } catch {
-    json = null;
-  }
-  if (!resp.ok) {
-    const err: any = new Error(
-      json?.error?.message || bodyText.slice(0, 200) || `OpenAI HTTP ${resp.status}`
-    );
     err.statusCode = resp.status === 401 || resp.status === 403 ? resp.status : 502;
     throw err;
   }
@@ -557,14 +494,13 @@ async function callGeminiJson(params: {
 }): Promise<{ text: string; model: string }> {
   const model = GEMINI_MODEL;
   const ai = new GoogleGenAI({ apiKey: params.apiKey });
+  const userPromptWithSchema = buildJsonInstructedPrompt(params.userPrompt, params.geminiSchema);
   const response = await ai.models.generateContent({
     model,
-    contents: params.userPrompt,
+    contents: userPromptWithSchema,
     config: {
       systemInstruction: params.systemInstruction,
       temperature: 0.35,
-      responseMimeType: "application/json",
-      responseSchema: params.geminiSchema,
     },
   });
   const text = String((response as any)?.text || "").trim();

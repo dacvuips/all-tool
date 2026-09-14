@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { getCustomerGeminiClient, retryAICall } from "./_shared";
+import { buildJsonInstructedPrompt } from "./_gemini";
+import { getCustomerGeminiClient, parseGeminiJsonResponse, retryAICall } from "./_shared";
 
 export default [
   {
@@ -107,26 +108,19 @@ Trả về JSON object duy nhất.`;
           ],
         };
 
+        const promptWithSchema = buildJsonInstructedPrompt(prompt, insertSceneSchema);
+
         const result = await retryAICall(
           () =>
             genAI.models.generateContent({
               model: "gemini-3-flash-preview",
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              config: {
-                responseMimeType: "application/json",
-                responseSchema: insertSceneSchema as any,
-              },
+              contents: [{ role: "user", parts: [{ text: promptWithSchema }] }],
             }),
           "insert-scene"
         );
 
         const responseText = result.text;
-        let parsed: any;
-        try {
-          parsed = JSON.parse(responseText || "{}");
-        } catch {
-          parsed = { raw: responseText };
-        }
+        const parsed: any = parseGeminiJsonResponse(responseText || "");
 
         // Ensure sceneNumber is set
         if (!parsed.sceneNumber) {

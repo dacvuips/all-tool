@@ -117,6 +117,25 @@ function parseJsonResult(value: unknown): Record<string, unknown> | unknown[] | 
   return null;
 }
 
+/** Gỡ markdown fence và cắt JSON object/array khỏi text AI (Flow2 không tự parse JSON hộ nữa). */
+function extractJsonFromText(text: string): Record<string, unknown> | unknown[] | null {
+  let s = text.trim();
+  const fenceMatch = s.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch?.[1]) s = fenceMatch[1].trim();
+  if (!(s.startsWith("{") || s.startsWith("["))) {
+    const firstBrace = s.indexOf("{");
+    const lastBrace = s.lastIndexOf("}");
+    const firstBracket = s.indexOf("[");
+    const lastBracket = s.lastIndexOf("]");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      s = s.slice(firstBrace, lastBrace + 1);
+    } else if (firstBracket !== -1 && lastBracket > firstBracket) {
+      s = s.slice(firstBracket, lastBracket + 1);
+    }
+  }
+  return parseJsonResult(s);
+}
+
 /** Lấy object `result` từ poll Flow2 gen_text. */
 export function pickFlow2TextResultPayload(
   statusData: Flow2StatusResponse
@@ -145,7 +164,7 @@ export function extractFlow2TextResult(statusData: Flow2StatusResponse): Flow2Te
   if (!payload) return null;
 
   const text = typeof payload.text === "string" ? payload.text : "";
-  const json = parseJsonResult(payload.json);
+  const json = parseJsonResult(payload.json) ?? (text ? extractJsonFromText(text) : null);
   const usage = parseUsage(payload.usage);
   const model = typeof payload.model === "string" ? payload.model : undefined;
   const thinkingLevel =
@@ -216,11 +235,32 @@ export async function normalizeAudioToDataUrl(input: Flow2AudioInput): Promise<s
   return `data:${stripped.mimeType};base64,${stripped.imageBytes}`;
 }
 
+/**
+ * Nhúng yêu cầu xuất JSON + schema vào đầu prompt.
+ * Flow2 gen_text (batchexecute, profile không có access_token) không hỗ trợ
+ * params `json`/`response_mime_type`/`schema` — báo lỗi
+ * `batchexecute_gen_text_schema_unsupported`. Phải bắt AI tuân theo schema bằng
+ * chỉ dẫn text trong prompt, rồi tự parse JSON từ `result.text` ở phía client.
+ */
+export function buildFlow2JsonInstructedPrompt(prompt: string, jsonSchema?: Flow2JsonSchema): string {
+  const parts = [
+    "BẮT BUỘC: Chỉ trả về DUY NHẤT một JSON object hợp lệ, không markdown, không code fence, không giải thích, không text nào khác ngoài JSON.",
+  ];
+  if (jsonSchema) {
+    parts.push(
+      "JSON trả về PHẢI khớp đúng schema sau (types, required fields, enum values):",
+      JSON.stringify(jsonSchema)
+    );
+  }
+  parts.push("", prompt);
+  return parts.join("\n");
+}
+
 export async function createFlow2TextRequest(
   params: Flow2CreateTextRequestParams
 ): Promise<{ requestId: string; raw: Record<string, unknown> }> {
-  const prompt = String(params.prompt || "").trim();
-  if (!prompt) {
+  const rawPrompt = String(params.prompt || "").trim();
+  if (!rawPrompt) {
     throw Object.assign(new Error("Thiếu prompt"), { statusCode: 400 });
   }
 
@@ -233,6 +273,9 @@ export async function createFlow2TextRequest(
   const thinkingLevel = normalizeFlow2ThinkingLevel(params.thinkingLevel);
 
   const useJsonMode = params.jsonMode === true || params.jsonSchema != null;
+  const prompt = useJsonMode
+    ? buildFlow2JsonInstructedPrompt(rawPrompt, params.jsonSchema)
+    : rawPrompt;
 
   return createFlow2Request(
     {
@@ -244,8 +287,6 @@ export async function createFlow2TextRequest(
         thinking_level: thinkingLevel,
         ...(image_base64s.length > 0 ? { image_base64s } : {}),
         ...(audio_base64s.length > 0 ? { audio_base64s } : {}),
-        ...(useJsonMode ? { json: true, response_mime_type: "application/json" } : {}),
-        ...(params.jsonSchema ? { schema: params.jsonSchema } : {}),
       },
     },
     flow2Opts(params.customerId)

@@ -97,9 +97,9 @@ export function BatchListPanel({
 
     try {
 
-      const current = await db.get(CACHE_KEY.lastElementScript);
-
-      const merged = mergeSceneListIntoData(current ?? scriptData, sceneListKey, updatedScenes);
+      // Dùng scriptData in-memory (luôn mới nhất, vd sau khi đổi aspectRatio ở sidebar) thay vì
+      // đọc lại IndexedDB — tránh ghi đè các field như aspectRatio bằng bản snapshot cũ (race condition).
+      const merged = mergeSceneListIntoData(scriptData, sceneListKey, updatedScenes);
 
       await db.set(CACHE_KEY.lastElementScript, merged);
 

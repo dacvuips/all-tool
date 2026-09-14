@@ -637,8 +637,29 @@ export function isFlow2RetryableCaptchaError(...inputs: (string | undefined)[]):
   });
 }
 
+/**
+ * Flow2 trả các mã lỗi này khi prompt/ảnh vi phạm chính sách nội dung (không phải lỗi tạm thời) —
+ * retry sẽ luôn thất bại lại nên cần trả lỗi ngay với message thân thiện cho user.
+ */
+const FLOW2_CONTENT_POLICY_ERROR_CODES = [
+  "AUDIO_GENERATION_FILTERED",
+  "GENERATED_VIDEO_INAPPROPRIATE_PHOTOREALISTIC_PERSON",
+];
+
+export function isFlow2ContentPolicyError(...inputs: (string | undefined)[]): boolean {
+  return inputs.some((input) => {
+    if (!input) return false;
+    const upper = input.toUpperCase();
+    return FLOW2_CONTENT_POLICY_ERROR_CODES.some((code) => upper.includes(code));
+  });
+}
+
+const FLOW2_CONTENT_POLICY_MESSAGE =
+  "Không tạo được video/ảnh vì Prompt hoặc ảnh vi phạm chính sách, cần thay đổi.";
+
 /** Flow2 đôi khi trả lỗi tạm thời khi model không tạo được media — retry tạo request mới. */
 export function isFlow2RetryableGenerationError(...inputs: (string | undefined)[]): boolean {
+  if (isFlow2ContentPolicyError(...inputs)) return false;
   return inputs.some((input) => {
     if (!input) return false;
     const normalized = input.toLowerCase();
@@ -698,7 +719,11 @@ export function isFlow2RetryableError(err: any): boolean {
 function formatFlow2FailureMessage(errorText: string): string {
   const trimmed = errorText.trim();
   const stripped = trimmed.replace(/^flow2 xử lý thất bại:\s*/i, "").trim();
-  return `Flow2 xử lý thất bại: ${stripped || trimmed || "Unknown error"}`;
+  const base = `Flow2 xử lý thất bại: ${stripped || trimmed || "Unknown error"}`;
+  if (isFlow2ContentPolicyError(trimmed)) {
+    return `${base} : ${FLOW2_CONTENT_POLICY_MESSAGE}`;
+  }
+  return base;
 }
 
 async function delayBeforeFlow2CaptchaRetry(attempt: number): Promise<void> {
